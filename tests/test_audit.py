@@ -29,3 +29,22 @@ def test_audit_structure():
     assert "robots" in results
     assert "sitemap" in results
     assert "security_headers" in results
+
+
+def test_canonical_audit():
+    """Test canonical URL audit."""
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+    
+    assert "canonical" in results
+    assert "present" in results["canonical"]
+
+
+def test_headings_audit():
+    """Test heading hierarchy audit."""
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+    
+    assert "headings" in results
+    assert "h1_count" in results["headings"]
+    assert "h1_valid" in results["headings"]
