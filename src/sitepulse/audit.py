@@ -37,6 +37,8 @@ class SEOAuditor:
             "robots": self._audit_robots(),
             "sitemap": self._audit_sitemap(),
             "security_headers": self._audit_security_headers()
+            "canonical": self._audit_canonical(),
+            "headings": self._audit_headings(),
         }
         return results
     
@@ -134,3 +136,30 @@ class SEOAuditor:
             }
         except Exception:
             return {"error": "Failed to fetch headers"}
+
+    def _audit_canonical(self) -> Dict:
+        """Audit canonical URL."""
+        soup = self._fetch_html()
+        if not soup:
+            return {"error": "Failed to fetch page"}
+        
+        canonical = soup.find('link', rel='canonical')
+        return {
+            "present": canonical is not None,
+            "href": canonical.get('href') if canonical else None
+        }
+    
+    def _audit_headings(self) -> Dict:
+        """Audit heading hierarchy."""
+        soup = self._fetch_html()
+        if not soup:
+            return {"error": "Failed to fetch page"}
+        
+        h1_count = len(soup.find_all('h1'))
+        h2_count = len(soup.find_all('h2'))
+        
+        return {
+            "h1_count": h1_count,
+            "h2_count": h2_count,
+            "h1_valid": h1_count == 1  # Should have exactly one H1
+        }

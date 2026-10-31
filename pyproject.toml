@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sitepulse"
-version = "0.1.0"
+version = "0.2.0"
 description = "Technical SEO audit CLI and library"
 authors = ["Abhishek Mandloi <163866821+Abhi6662@users.noreply.github.com>"]
 license = "MIT"
