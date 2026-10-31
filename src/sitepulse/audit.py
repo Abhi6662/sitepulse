@@ -45,7 +45,7 @@ class SEOAuditor:
         try:
             resp = requests.get(self.url, timeout=self.timeout)
             resp.raise_for_status()
-            return BeautifulSoup(resp.content, 'lxml')
+            return BeautifulSoup(resp.content, 'html.parser')
         except Exception:
             return None
     

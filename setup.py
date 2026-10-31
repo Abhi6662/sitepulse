@@ -8,7 +8,6 @@ setup(
     install_requires=[
         "requests>=2.31.0",
         "beautifulsoup4>=4.12.0",
-        "lxml>=5.0.0",
         "click>=8.1.0",
         "rich>=13.7.0",
     ],

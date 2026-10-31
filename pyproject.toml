@@ -11,7 +11,6 @@ packages = [{include = "sitepulse", from = "src"}]
 python = "^3.10"
 requests = "^2.31.0"
 beautifulsoup4 = "^4.12.0"
-lxml = "^5.0.0"
 click = "^8.1.0"
 rich = "^13.7.0"
 
