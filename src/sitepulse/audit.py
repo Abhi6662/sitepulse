@@ -36,7 +36,7 @@ class SEOAuditor:
             "schema": self._audit_schema(),
             "robots": self._audit_robots(),
             "sitemap": self._audit_sitemap(),
-            "security_headers": self._audit_security_headers()
+            "security_headers": self._audit_security_headers(),
             "canonical": self._audit_canonical(),
             "headings": self._audit_headings(),
         }
