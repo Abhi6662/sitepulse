@@ -10,10 +10,10 @@ from bs4 import BeautifulSoup
 
 class SEOAuditor:
     """Technical SEO auditor."""
-    
+
     def __init__(self, url: str, timeout: int = 10):
         """Initialize auditor.
-        
+
         Args:
             url: URL to audit
             timeout: Request timeout in seconds
@@ -22,10 +22,10 @@ class SEOAuditor:
         self.timeout = timeout
         self.parsed_url = urlparse(url)
         self.base_domain = f"{self.parsed_url.scheme}://{self.parsed_url.netloc}"
-    
+
     def audit(self) -> Dict:
         """Run full audit.
-        
+
         Returns:
             Dictionary with audit results
         """
@@ -39,9 +39,12 @@ class SEOAuditor:
             "security_headers": self._audit_security_headers(),
             "canonical": self._audit_canonical(),
             "headings": self._audit_headings(),
+            "viewport": self._audit_viewport(),
+            "images": self._audit_images(),
+            "meta_robots": self._audit_meta_robots(),
         }
         return results
-    
+
     def _fetch_html(self) -> Optional[BeautifulSoup]:
         """Fetch and parse HTML."""
         try:
@@ -50,50 +53,50 @@ class SEOAuditor:
             return BeautifulSoup(resp.content, 'html.parser')
         except Exception:
             return None
-    
+
     def _audit_meta(self) -> Dict:
         """Audit meta tags."""
         soup = self._fetch_html()
         if not soup:
             return {"error": "Failed to fetch page"}
-        
+
         title = soup.find('title')
         description = soup.find('meta', attrs={'name': 'description'})
-        
+
         return {
             "title": title.get_text(strip=True) if title else None,
             "title_length": len(title.get_text(strip=True)) if title else 0,
             "description": description.get('content') if description else None,
             "description_length": len(description.get('content')) if description else 0
         }
-    
+
     def _audit_opengraph(self) -> Dict:
         """Audit OpenGraph tags."""
         soup = self._fetch_html()
         if not soup:
             return {"error": "Failed to fetch page"}
-        
+
         og_tags = {}
         for tag in soup.find_all('meta', property=re.compile(r'^og:')):
             og_tags[tag.get('property')] = tag.get('content')
-        
+
         return og_tags
-    
+
     def _audit_schema(self) -> List[Dict]:
         """Audit JSON-LD schema."""
         soup = self._fetch_html()
         if not soup:
             return [{"error": "Failed to fetch page"}]
-        
+
         schemas = []
         for script in soup.find_all('script', type='application/ld+json'):
             try:
                 schemas.append(json.loads(script.string))
             except json.JSONDecodeError:
                 pass
-        
+
         return schemas
-    
+
     def _audit_robots(self) -> Dict:
         """Audit robots.txt."""
         robots_url = urljoin(self.base_domain, '/robots.txt')
@@ -107,7 +110,7 @@ class SEOAuditor:
             }
         except Exception:
             return {"url": robots_url, "exists": False}
-    
+
     def _audit_sitemap(self) -> Dict:
         """Audit sitemap.xml."""
         sitemap_url = urljoin(self.base_domain, '/sitemap.xml')
@@ -121,13 +124,13 @@ class SEOAuditor:
             }
         except Exception:
             return {"url": sitemap_url, "exists": False}
-    
+
     def _audit_security_headers(self) -> Dict:
         """Audit HTTP security headers."""
         try:
             resp = requests.get(self.url, timeout=self.timeout)
             headers = resp.headers
-            
+
             return {
                 "strict_transport_security": headers.get('Strict-Transport-Security'),
                 "content_security_policy": headers.get('Content-Security-Policy'),
@@ -142,24 +145,118 @@ class SEOAuditor:
         soup = self._fetch_html()
         if not soup:
             return {"error": "Failed to fetch page"}
-        
+
         canonical = soup.find('link', rel='canonical')
         return {
             "present": canonical is not None,
             "href": canonical.get('href') if canonical else None
         }
-    
+
     def _audit_headings(self) -> Dict:
         """Audit heading hierarchy."""
         soup = self._fetch_html()
         if not soup:
             return {"error": "Failed to fetch page"}
-        
+
         h1_count = len(soup.find_all('h1'))
         h2_count = len(soup.find_all('h2'))
-        
+
         return {
             "h1_count": h1_count,
             "h2_count": h2_count,
             "h1_valid": h1_count == 1  # Should have exactly one H1
+        }
+
+    def _audit_viewport(self) -> Dict:
+        """Audit viewport meta tag for mobile responsiveness."""
+        soup = self._fetch_html()
+        if not soup:
+            return {"error": "Failed to fetch page"}
+
+        viewport = soup.find('meta', attrs={'name': 'viewport'})
+        if not viewport:
+            return {
+                "present": False,
+                "content": None,
+                "has_width_device_width": False,
+                "has_initial_scale": False
+            }
+
+        content = viewport.get('content') or ''
+        content_lower = content.lower()
+        return {
+            "present": True,
+            "content": content,
+            "has_width_device_width": 'width=device-width' in content_lower,
+            "has_initial_scale": 'initial-scale' in content_lower
+        }
+
+    def _audit_images(self) -> Dict:
+        """Audit image alt text coverage."""
+        soup = self._fetch_html()
+        if not soup:
+            return {"error": "Failed to fetch page"}
+
+        images = soup.find_all('img')
+        total = len(images)
+
+        if total == 0:
+            return {
+                "total": 0,
+                "with_alt": 0,
+                "missing_alt": 0,
+                "coverage_percent": 100.0,
+                "missing_details": []
+            }
+
+        with_alt = 0
+        missing_details = []
+        for idx, img in enumerate(images):
+            alt = img.get('alt', '') or ''
+            alt_stripped = alt.strip()
+            if alt_stripped:
+                with_alt += 1
+            else:
+                src = img.get('src', '') or ''
+                missing_details.append({
+                    "index": idx,
+                    "src": src[:100] if src else "inline/no-src"
+                })
+
+        return {
+            "total": total,
+            "with_alt": with_alt,
+            "missing_alt": total - with_alt,
+            "coverage_percent": round((with_alt / total) * 100, 1),
+            "missing_details": missing_details[:10]  # Limit to first 10
+        }
+
+    def _audit_meta_robots(self) -> Dict:
+        """Audit meta robots tag for indexing directives."""
+        soup = self._fetch_html()
+        if not soup:
+            return {"error": "Failed to fetch page"}
+
+        robots_meta = soup.find('meta', attrs={'name': 'robots'})
+        if not robots_meta:
+            return {
+                "present": False,
+                "content": None,
+                "noindex": False,
+                "nofollow": False,
+                "none": False,
+                "directives": []
+            }
+
+        content = robots_meta.get('content') or ''
+        content_lower = content.lower()
+        directives = [d.strip() for d in content_lower.split(',')]
+
+        return {
+            "present": True,
+            "content": content,
+            "noindex": 'noindex' in directives,
+            "nofollow": 'nofollow' in directives,
+            "none": 'none' in directives,
+            "directives": directives
         }
