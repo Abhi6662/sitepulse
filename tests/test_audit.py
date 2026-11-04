@@ -100,14 +100,24 @@ def test_html_is_fetched_once_per_audit(monkeypatch):
     Before this fix, every _audit_* method re-fetched the page (8+ HTTP calls per audit()).
     Now HTML and headers are fetched once each; robots.txt/sitemap.xml are separate URLs.
     """
+    import sitepulse.audit as audit_module
+
     calls: dict[str, int] = {}
-    real_get = requests.get
+    real_requests = audit_module.requests
 
-    def counting_get(url, *args, **kwargs):
-        calls[url] = calls.get(url, 0) + 1
-        return real_get(url, *args, **kwargs)
+    class CountingRequests:
+        def __init__(self, real):
+            self._real = real
 
-    monkeypatch.setattr(requests, "get", counting_get)
+        def get(self, url, *args, **kwargs):
+            calls[url] = calls.get(url, 0) + 1
+            return self._real.get(url, *args, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._real, name)
+
+    fake = CountingRequests(real_requests)
+    monkeypatch.setattr(audit_module, "requests", fake)
     auditor = SEOAuditor("https://example.com", timeout=5)
     auditor.audit()
 
