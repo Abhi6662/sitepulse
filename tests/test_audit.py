@@ -99,25 +99,26 @@ def test_html_is_fetched_once_per_audit(monkeypatch):
 
     Before this fix, every _audit_* method re-fetched the page (8+ HTTP calls per audit()).
     Now HTML and headers are fetched once each; robots.txt/sitemap.xml are separate URLs.
+
+    Uses fake responses so the test is deterministic, network-free, and isolated
+    from other tests' real network calls.
     """
     import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
 
     calls: dict[str, int] = {}
-    real_requests = audit_module.requests
 
-    class CountingRequests:
-        def __init__(self, real):
-            self._real = real
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b"<html><title>Example</title><meta name='description' content='desc'><img src='/a.png'><img src='/b.png'><meta name='robots' content='index,follow'></html>"
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
 
-        def get(self, url, *args, **kwargs):
-            calls[url] = calls.get(url, 0) + 1
-            return self._real.get(url, *args, **kwargs)
-
-        def __getattr__(self, name):
-            return getattr(self._real, name)
-
-    fake = CountingRequests(real_requests)
-    monkeypatch.setattr(audit_module, "requests", fake)
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
     auditor = SEOAuditor("https://example.com", timeout=5)
     auditor.audit()
 
