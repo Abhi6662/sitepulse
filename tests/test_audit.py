@@ -1,6 +1,7 @@
 """Tests for SEOAuditor."""
 
 import pytest
+import requests
 from sitepulse import SEOAuditor
 
 
@@ -91,3 +92,27 @@ def test_meta_robots_audit():
     assert "nofollow" in meta_robots
     assert "none" in meta_robots
     assert "directives" in meta_robots
+
+
+def test_html_is_fetched_once_per_audit(monkeypatch):
+    """Test that audit() fetches the live page only once (caching regression guard).
+
+    Before this fix, every _audit_* method re-fetched the page (8+ HTTP calls per audit()).
+    Now HTML and headers are fetched once each; robots.txt/sitemap.xml are separate URLs.
+    """
+    calls: dict[str, int] = {}
+    real_get = requests.get
+
+    def counting_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        return real_get(url, *args, **kwargs)
+
+    monkeypatch.setattr(requests, "get", counting_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    auditor.audit()
+
+    # Main page: one HTML fetch + one headers fetch = exactly 2
+    assert calls["https://example.com"] == 2, f"Main page fetched {calls['https://example.com']} times, expected 2"
+    # robots.txt and sitemap.xml are distinct, legitimate fetches (1 each)
+    assert calls.get("https://example.com/robots.txt", 0) == 1
+    assert calls.get("https://example.com/sitemap.xml", 0) == 1
