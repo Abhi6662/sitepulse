@@ -2,6 +2,7 @@
 
 import re
 import json
+import math
 from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 import requests
@@ -48,6 +49,7 @@ class SEOAuditor:
             "viewport": self._audit_viewport(),
             "images": self._audit_images(),
             "meta_robots": self._audit_meta_robots(),
+            "content": self._audit_content(),
         }
         return results
 
@@ -269,3 +271,78 @@ class SEOAuditor:
             "none": 'none' in directives,
             "directives": directives
         }
+
+    def _audit_content(self) -> Dict:
+        """Audit page content: word count, reading time, readability."""
+        if self._html_soup is None:
+            return {"error": "Failed to fetch page"}
+
+        # Extract visible text content
+        # Remove script, style, noscript, and other non-content tags
+        for tag in self._html_soup(['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']):
+            tag.decompose()
+
+        text = self._html_soup.get_text(separator=' ', strip=True)
+        words = text.split()
+        word_count = len(words)
+
+        # Reading time: average adult reads ~200 words/min
+        reading_time_minutes = math.ceil(word_count / 200) if word_count > 0 else 0
+
+        # Simple readability: Flesch Reading Ease approximation
+        # Count sentences (rough: . ! ?)
+        sentences = re.split(r'[.!?]+', text)
+        sentence_count = len([s for s in sentences if s.strip()])
+
+        # Count syllables roughly (vowel groups)
+        def count_syllables(word):
+            word = word.lower()
+            vowels = 'aeiouy'
+            count = 0
+            prev_was_vowel = False
+            for char in word:
+                is_vowel = char in vowels
+                if is_vowel and not prev_was_vowel:
+                    count += 1
+                prev_was_vowel = is_vowel
+            # Adjust for silent e
+            if word.endswith('e') and count > 1:
+                count -= 1
+            return max(1, count)
+
+        syllable_count = sum(count_syllables(w) for w in words)
+
+        # Flesch Reading Ease: 206.835 - 1.015*(words/sentences) - 84.6*(syllables/words)
+        flesch_score = None
+        if sentence_count > 0 and word_count > 0:
+            flesch_score = round(
+                206.835 - 1.015 * (word_count / sentence_count) - 84.6 * (syllable_count / word_count),
+                1
+            )
+
+        return {
+            "word_count": word_count,
+            "reading_time_minutes": reading_time_minutes,
+            "sentence_count": sentence_count,
+            "avg_words_per_sentence": round(word_count / sentence_count, 1) if sentence_count > 0 else 0,
+            "syllable_count": syllable_count,
+            "flesch_reading_ease": flesch_score,
+            "readability_grade": self._grade_from_flesch(flesch_score) if flesch_score is not None else None
+        }
+
+    def _grade_from_flesch(self, score: float) -> str:
+        """Convert Flesch Reading Ease score to grade level description."""
+        if score >= 90:
+            return "5th grade (Very Easy)"
+        elif score >= 80:
+            return "6th grade (Easy)"
+        elif score >= 70:
+            return "7th grade (Fairly Easy)"
+        elif score >= 60:
+            return "8th-9th grade (Standard)"
+        elif score >= 50:
+            return "10th-12th grade (Fairly Difficult)"
+        elif score >= 30:
+            return "College (Difficult)"
+        else:
+            return "College Graduate (Very Difficult)"

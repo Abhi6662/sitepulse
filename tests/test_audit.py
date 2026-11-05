@@ -94,6 +94,22 @@ def test_meta_robots_audit():
     assert "directives" in meta_robots
 
 
+def test_content_audit():
+    """Test content analysis audit."""
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    assert "content" in results
+    content = results["content"]
+    assert "word_count" in content
+    assert "reading_time_minutes" in content
+    assert "sentence_count" in content
+    assert "avg_words_per_sentence" in content
+    assert "syllable_count" in content
+    assert "flesch_reading_ease" in content
+    assert "readability_grade" in content
+
+
 def test_html_is_fetched_once_per_audit(monkeypatch):
     """Test that audit() fetches the live page only once (caching regression guard).
 
