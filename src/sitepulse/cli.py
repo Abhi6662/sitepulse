@@ -104,6 +104,19 @@ def _print_markdown(results: dict, console: Console):
             if meta_robots.get('directives'):
                 console.print(f"Directives: {', '.join(meta_robots['directives'])}")
 
+    # Content Analysis
+    content = results.get('content', {})
+    console.print("\n[bold cyan]Content Analysis[/bold cyan]")
+    if content.get('error'):
+        console.print(f"Error: {content['error']}")
+    else:
+        console.print(f"Word Count: {content.get('word_count', 0)}")
+        console.print(f"Reading Time: {content.get('reading_time_minutes', 0)} min")
+        console.print(f"Sentences: {content.get('sentence_count', 0)}")
+        console.print(f"Avg Words/Sentence: {content.get('avg_words_per_sentence', 0)}")
+        console.print(f"Flesch Reading Ease: {content.get('flesch_reading_ease', 'N/A')}")
+        console.print(f"Readability Grade: {content.get('readability_grade', 'N/A')}")
+
 
 if __name__ == '__main__':
     main()
