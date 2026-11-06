@@ -41,6 +41,7 @@ class SEOAuditor:
             "meta": self._audit_meta(),
             "opengraph": self._audit_opengraph(),
             "schema": self._audit_schema(),
+            "twitter_cards": self._audit_twitter_cards(),
             "robots": self._audit_robots(),
             "sitemap": self._audit_sitemap(),
             "security_headers": self._audit_security_headers(),
@@ -113,6 +114,38 @@ class SEOAuditor:
                 pass
 
         return schemas
+
+    def _audit_twitter_cards(self) -> Dict:
+        """Audit Twitter Card meta tags."""
+        if self._html_soup is None:
+            return {"error": "Failed to fetch page"}
+
+        twitter_tags = {}
+        for tag in self._html_soup.find_all('meta', attrs={'name': re.compile(r'^twitter:')}):
+            twitter_tags[tag.get('name')] = tag.get('content')
+
+        # Validate required tags for summary_large_image (most common)
+        card_type = twitter_tags.get('twitter:card', '').lower()
+        required_tags = {
+            'summary': ['twitter:card', 'twitter:title'],
+            'summary_large_image': ['twitter:card', 'twitter:title', 'twitter:description', 'twitter:image'],
+            'app': ['twitter:card', 'twitter:title', 'twitter:description'],
+            'player': ['twitter:card', 'twitter:title', 'twitter:description', 'twitter:player']
+        }
+
+        missing_required = []
+        if card_type in required_tags:
+            for req in required_tags[card_type]:
+                if req not in twitter_tags or not twitter_tags[req]:
+                    missing_required.append(req)
+
+        return {
+            "present": len(twitter_tags) > 0,
+            "card_type": card_type if card_type else None,
+            "tags": twitter_tags,
+            "missing_required": missing_required,
+            "valid": len(missing_required) == 0 and len(twitter_tags) > 0
+        }
 
     def _audit_robots(self) -> Dict:
         """Audit robots.txt."""
