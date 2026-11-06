@@ -35,6 +35,20 @@ def test_audit_structure():
     assert "meta_robots" in results
 
 
+def test_twitter_cards_audit():
+    """Test Twitter Card meta tags audit."""
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    assert "twitter_cards" in results
+    twitter = results["twitter_cards"]
+    assert "present" in twitter
+    assert "card_type" in twitter
+    assert "tags" in twitter
+    assert "missing_required" in twitter
+    assert "valid" in twitter
+
+
 def test_canonical_audit():
     """Test canonical URL audit."""
     auditor = SEOAuditor("https://example.com", timeout=5)
@@ -143,3 +157,112 @@ def test_html_is_fetched_once_per_audit(monkeypatch):
     # robots.txt and sitemap.xml are distinct, legitimate fetches (1 each)
     assert calls.get("https://example.com/robots.txt", 0) == 1
     assert calls.get("https://example.com/sitemap.xml", 0) == 1
+
+
+def test_twitter_cards_validation(monkeypatch):
+    """Test Twitter Card validation logic with mocked HTML."""
+    import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
+
+    calls: dict[str, int] = {}
+
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        # HTML with valid Twitter Card (summary_large_image)
+        resp.content = b"""
+        <html>
+            <head>
+                <meta name="twitter:card" content="summary_large_image">
+                <meta name="twitter:title" content="Test Title">
+                <meta name="twitter:description" content="Test Description">
+                <meta name="twitter:image" content="https://example.com/image.png">
+            </head>
+            <body></body>
+        </html>
+        """
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    twitter = results["twitter_cards"]
+    assert twitter["present"] is True
+    assert twitter["card_type"] == "summary_large_image"
+    assert twitter["valid"] is True
+    assert twitter["missing_required"] == []
+    assert "twitter:card" in twitter["tags"]
+    assert "twitter:title" in twitter["tags"]
+    assert "twitter:description" in twitter["tags"]
+    assert "twitter:image" in twitter["tags"]
+
+
+def test_twitter_cards_missing_required(monkeypatch):
+    """Test Twitter Card validation detects missing required tags."""
+    import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
+
+    calls: dict[str, int] = {}
+
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        # HTML with incomplete Twitter Card (missing twitter:description and twitter:image)
+        resp.content = b"""
+        <html>
+            <head>
+                <meta name="twitter:card" content="summary_large_image">
+                <meta name="twitter:title" content="Test Title">
+            </head>
+            <body></body>
+        </html>
+        """
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    twitter = results["twitter_cards"]
+    assert twitter["present"] is True
+    assert twitter["card_type"] == "summary_large_image"
+    assert twitter["valid"] is False
+    assert "twitter:description" in twitter["missing_required"]
+    assert "twitter:image" in twitter["missing_required"]
+
+
+def test_twitter_cards_no_tags(monkeypatch):
+    """Test Twitter Card audit when no Twitter tags present."""
+    import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
+
+    calls: dict[str, int] = {}
+
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b"<html><head><title>No Twitter Cards</title></head><body></body></html>"
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    twitter = results["twitter_cards"]
+    assert twitter["present"] is False
+    assert twitter["valid"] is False
+    assert twitter["card_type"] is None
+    assert twitter["tags"] == {}

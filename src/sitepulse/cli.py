@@ -39,6 +39,21 @@ def _print_markdown(results: dict, console: Console):
     og = results.get('opengraph', {})
     console.print(f"[bold cyan]OpenGraph Tags[/bold cyan]: {len(og)} found\n")
 
+    # Twitter Cards
+    twitter = results.get('twitter_cards', {})
+    console.print("[bold cyan]Twitter Cards[/bold cyan]")
+    if twitter.get('error'):
+        console.print(f"Error: {twitter['error']}")
+    else:
+        console.print(f"Present: {'✓' if twitter.get('present') else '✗'}")
+        if twitter.get('present'):
+            console.print(f"Card Type: {twitter.get('card_type') or 'Not specified'}")
+            console.print(f"Valid: {'✓' if twitter.get('valid') else '✗'}")
+            if twitter.get('missing_required'):
+                console.print(f"Missing Required: {', '.join(twitter['missing_required'])}")
+            console.print(f"Tags Found: {len(twitter.get('tags', {}))}")
+    console.print()
+
     # Schema
     schema = results.get('schema', [])
     console.print(f"[bold cyan]JSON-LD Schema[/bold cyan]: {len(schema)} found\n")
