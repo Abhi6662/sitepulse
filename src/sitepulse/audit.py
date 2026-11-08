@@ -51,6 +51,7 @@ class SEOAuditor:
             "images": self._audit_images(),
             "meta_robots": self._audit_meta_robots(),
             "content": self._audit_content(),
+            "links": self._audit_links(),
         }
         return results
 
@@ -379,3 +380,48 @@ class SEOAuditor:
             return "College (Difficult)"
         else:
             return "College Graduate (Very Difficult)"
+
+    def _audit_links(self) -> Dict:
+        """Audit internal and external links on the page."""
+        if self._html_soup is None:
+            return {"error": "Failed to fetch page"}
+
+        links = self._html_soup.find_all('a', href=True)
+        internal = []
+        external = []
+
+        for link in links:
+            href = link.get('href', '').strip()
+            if not href:
+                continue
+
+            # Resolve relative URLs
+            absolute_url = urljoin(self.url, href)
+
+            # Categorize
+            if absolute_url.startswith(self.base_domain):
+                internal.append({
+                    "url": absolute_url,
+                    "anchor": link.get_text(strip=True)[:100],
+                    "rel": link.get('rel', [])
+                })
+            else:
+                external.append({
+                    "url": absolute_url,
+                    "anchor": link.get_text(strip=True)[:100],
+                    "rel": link.get('rel', [])
+                })
+
+        # Anchor text analysis for internal links
+        anchor_texts = [l["anchor"] for l in internal if l["anchor"]]
+        anchor_diversity = len(set(anchor_texts)) / len(anchor_texts) if anchor_texts else 1.0
+
+        return {
+            "total": len(links),
+            "internal_count": len(internal),
+            "external_count": len(external),
+            "internal_links": internal[:50],  # Limit output
+            "external_links": external[:50],  # Limit output
+            "anchor_text_diversity": round(anchor_diversity, 2),
+            "unique_anchors": len(set(anchor_texts)),
+        }
