@@ -266,3 +266,123 @@ def test_twitter_cards_no_tags(monkeypatch):
     assert twitter["valid"] is False
     assert twitter["card_type"] is None
     assert twitter["tags"] == {}
+
+
+def test_links_audit(monkeypatch):
+    """Test internal link analysis audit."""
+    import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
+
+    calls: dict[str, int] = {}
+
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        # HTML with internal and external links
+        resp.content = b"""
+        <html>
+            <head><title>Link Test</title></head>
+            <body>
+                <a href="/page1">Internal Page 1</a>
+                <a href="/page2">Internal Page 2</a>
+                <a href="https://example.com/page3">Absolute Internal</a>
+                <a href="https://external.com/page">External Link</a>
+                <a href="https://another.com/page">Another External</a>
+                <a href="">Empty href</a>
+                <a>No href</a>
+            </body>
+        </html>
+        """
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    links = results["links"]
+    assert "total" in links
+    assert "internal_count" in links
+    assert "external_count" in links
+    assert "internal_links" in links
+    assert "external_links" in links
+    assert "anchor_text_diversity" in links
+    assert "unique_anchors" in links
+
+    # 6 valid links found by BeautifulSoup (href=True includes empty href)
+    # But we filter out empty hrefs in our loop
+    assert links["total"] == 6
+    assert links["internal_count"] == 3
+    assert links["external_count"] == 2
+    assert len(links["internal_links"]) == 3
+    assert len(links["external_links"]) == 2
+
+
+def test_links_audit_no_links(monkeypatch):
+    """Test links audit when page has no links."""
+    import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
+
+    calls: dict[str, int] = {}
+
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.content = b"<html><head><title>No Links</title></head><body><p>Just text</p></body></html>"
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    links = results["links"]
+    assert links["total"] == 0
+    assert links["internal_count"] == 0
+    assert links["external_count"] == 0
+    assert links["internal_links"] == []
+    assert links["external_links"] == []
+    assert links["anchor_text_diversity"] == 1.0
+    assert links["unique_anchors"] == 0
+
+
+def test_links_audit_anchor_diversity(monkeypatch):
+    """Test anchor text diversity calculation."""
+    import sitepulse.audit as audit_module
+    from unittest.mock import MagicMock
+
+    calls: dict[str, int] = {}
+
+    def fake_get(url, *args, **kwargs):
+        calls[url] = calls.get(url, 0) + 1
+        resp = MagicMock()
+        resp.status_code = 200
+        # All internal links with same anchor text = low diversity
+        resp.content = b"""
+        <html>
+            <body>
+                <a href="/page1">Click Here</a>
+                <a href="/page2">Click Here</a>
+                <a href="/page3">Click Here</a>
+            </body>
+        </html>
+        """
+        resp.text = resp.content.decode()
+        resp.headers = {"Content-Type": "text/html"}
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    monkeypatch.setattr(audit_module.requests, "get", fake_get)
+    auditor = SEOAuditor("https://example.com", timeout=5)
+    results = auditor.audit()
+
+    links = results["links"]
+    assert links["internal_count"] == 3
+    assert links["unique_anchors"] == 1
+    assert links["anchor_text_diversity"] == 0.33  # 1 unique / 3 total = 0.33...
